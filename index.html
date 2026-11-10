@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎄 크리스마스 소원 나무 협력 보드</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 구글 폰트 (Jua & Noto Sans KR) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <!-- FontAwesome 아이콘 CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Canvas Confetti CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- 전 세계 무료 오픈 실시간 웹소켓 브로커 클라이언트 (Paho MQTT) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      user-select: none;
+    }
+    .font-jua {
+      font-family: 'Jua', sans-serif;
+    }
+
+    /* 눈 내리는 캔버스 */
+    #snow-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* 카드 팝업 효과 */
+    @keyframes popIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.9) translateY(12px);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+    .card-animate {
+      animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* 크리스마스 전구 조명 반짝임 */
+    @keyframes bulbGlow1 {
+      0%, 100% { filter: drop-shadow(0 0 10px #ff3838); opacity: 1; }
+      50% { opacity: 0.3; filter: none; }
+    }
+    @keyframes bulbGlow2 {
+      0%, 100% { filter: drop-shadow(0 0 10px #ffd32a); opacity: 1; }
+      50% { opacity: 0.3; filter: none; }
+    }
+    @keyframes bulbGlow3 {
+      0%, 100% { filter: drop-shadow(0 0 10px #0be881); opacity: 1; }
+      50% { opacity: 0.3; filter: none; }
+    }
+    .glow-red { animation: bulbGlow1 1.6s infinite ease-in-out; }
+    .glow-yellow { animation: bulbGlow2 1.4s infinite ease-in-out 0.4s; }
+    .glow-green { animation: bulbGlow3 1.8s infinite ease-in-out 0.8s; }
+
+    /* 커스텀 스크롤바 */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(10, 30, 18, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(220, 38, 38, 0.7); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(220, 38, 38, 1); }
+  </style>
+</head>
+<body class="bg-gradient-to-b from-[#0a2012] via-[#0d2818] to-[#1a080c] min-h-screen text-slate-100 flex flex-col relative overflow-x-hidden">
+
+  <!-- 눈 내리는 배경 캔버스 -->
+  <canvas id="snow-canvas"></canvas>
+
+  <!-- 상단 크리스마스 전구 가랜드 장식 -->
+  <div class="relative z-20 w-full overflow-hidden flex justify-around items-start pt-1 pb-2 border-b border-white/10 bg-black/20 backdrop-blur-sm pointer-events-none">
+    <div class="text-xl glow-red">🔴</div>
+    <div class="text-xl glow-yellow">🟡</div>
+    <div class="text-xl glow-green">🟢</div>
+    <div class="text-xl glow-red hidden sm:block">🔴</div>
+    <div class="text-xl glow-yellow">🟡</div>
+    <div class="text-xl glow-green hidden sm:block">🟢</div>
+    <div class="text-xl glow-red">🔴</div>
+    <div class="text-xl glow-yellow">🟡</div>
+    <div class="text-xl glow-green">🟢</div>
+  </div>
+
+  <!-- 메인 상단 헤더 -->
+  <header class="relative z-20 max-w-6xl w-full mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <span class="text-4xl filter drop-shadow">🎄</span>
+      <div>
+        <h1 class="text-2xl md:text-3xl font-jua text-amber-300 tracking-wide drop-shadow flex items-center gap-2">
+          크리스마스 소원 나무
+          <span class="text-xs bg-red-600 text-white font-sans font-bold px-2.5 py-0.5 rounded-full border border-red-400">7·8·9반</span>
+        </h1>
+        <p class="text-xs text-emerald-200 mt-0.5">산타 할아버지께 보내는 우리 반의 따뜻한 3가지 소원 ✨</p>
+      </div>
+    </div>
+
+    <!-- 네비게이션 & 제어 바 -->
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- 실시간 연결 상태 표시 배지 -->
+      <div id="live-indicator" class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] bg-emerald-950/80 text-emerald-300 border border-emerald-600/50">
+        <span id="live-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+        <span id="live-status-text">실시간 서버 연결 중...</span>
+      </div>
+
+      <!-- 학생 접속용 QR 버튼 -->
+      <button 
+        id="btn-open-qr"
+        type="button"
+        class="px-3.5 py-1.5 rounded-xl font-bold text-xs bg-emerald-800/90 hover:bg-emerald-700 text-amber-200 border border-emerald-500/60 shadow flex items-center gap-1.5 transition active:scale-95"
+      >
+        <i class="fa-solid fa-qrcode"></i>
+        <span>학생 접속 QR</span>
+      </button>
+
+      <!-- 탭 스위처: 소원 적기(학생) vs 협력 보드(교사) -->
+      <div class="bg-black/40 p-1 rounded-2xl flex items-center border border-white/10 backdrop-blur-md">
+        <button 
+          id="tab-student" 
+          type="button"
+          class="px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 bg-red-600 text-white shadow-md"
+        >
+          <i class="fa-solid fa-pen-fancy"></i>
+          <span>소원 적기 (학생)</span>
+        </button>
+
+        <button 
+          id="tab-board" 
+          type="button"
+          class="px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 text-emerald-200 hover:text-white"
+        >
+          <i id="lock-icon" class="fa-solid fa-lock text-amber-400"></i>
+          <span>협력 보드 (선생님)</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 메인 콘텐츠 영역 -->
+  <main class="relative z-20 flex-1 max-w-6xl w-full mx-auto px-4 pb-12">
+
+    <!-- 1. 학생용 소원 작성 페이지 -->
+    <section id="view-student" class="max-w-xl mx-auto pt-2">
+      <div class="bg-gradient-to-b from-[#163824]/95 to-[#0b1f13]/98 border-2 border-amber-400/50 rounded-3xl p-6 md:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
+        
+        <div class="absolute -right-4 -bottom-4 text-7xl opacity-15 select-none pointer-events-none">🎁</div>
+        <div class="absolute -left-3 top-2 text-6xl opacity-10 select-none pointer-events-none">⛄</div>
+
+        <div class="text-center mb-6">
+          <div class="inline-block p-2 bg-red-600/30 rounded-2xl border border-red-500/40 text-2xl mb-2">
+            🎅 💌 ❄️
+          </div>
+          <h2 class="text-2xl font-jua text-amber-300">내 크리스마스 소원 3가지 적기</h2>
+          <p class="text-xs text-emerald-200 mt-1">소원을 정성껏 적어 트리에 걸어보세요!</p>
+        </div>
+
+        <form id="wish-form" class="space-y-4">
+          <!-- 반 선택 & 이름(또는 별명) & 익명 여부 -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label for="input-class" class="block text-xs font-bold text-emerald-200 mb-1">
+                <i class="fa-solid fa-school text-amber-300 mr-1"></i>우리 반 선택
+              </label>
+              <select 
+                id="input-class" 
+                required
+                class="w-full bg-[#0a1f13] border border-emerald-600/70 rounded-xl px-3 py-2 text-sm text-amber-200 font-bold focus:outline-none focus:border-amber-400"
+              >
+                <option value="7반">🎄 7반</option>
+                <option value="8반">⭐ 8반</option>
+                <option value="9반">🎁 9반</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label for="input-name" class="text-xs font-bold text-emerald-200">
+                  <i class="fa-solid fa-user text-amber-300 mr-1"></i>이름 또는 닉네임
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer text-xs text-amber-300 font-bold">
+                  <input type="checkbox" id="input-anonymous" class="rounded text-red-600 focus:ring-0">
+                  <span>익명으로 걸기</span>
+                </label>
+              </div>
+              <input 
+                type="text" 
+                id="input-name" 
+                placeholder="이름 (예: 김민우)" 
+                maxlength="15" 
+                required
+                class="w-full bg-[#0a1f13] border border-emerald-600/70 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-400"
+              >
+              <p id="anon-hint" class="text-[11px] text-amber-300/80 mt-1 hidden">
+                * 익명 선택 시 이름을 비워두면 <strong>'비밀의 요정 🧝'</strong>으로 등록됩니다.
+              </p>
+            </div>
+          </div>
+
+          <!-- 소원 3가지 입력 -->
+          <div class="space-y-3 pt-2">
+            <div>
+              <label class="block text-xs font-bold text-rose-300 mb-1 flex items-center gap-1">
+                <span class="w-5 h-5 rounded-full bg-rose-600/40 text-rose-200 flex items-center justify-center text-[10px] border border-rose-400">1</span>
+                첫 번째 소원 (나를 위한 소원)
+              </label>
+              <input 
+                type="text" 
+                id="wish-1" 
+                placeholder="예: 이번 크리스마스에 가족들과 행복한 시간 보내기" 
+                maxlength="80" 
+                required
+                class="w-full bg-[#0a1f13] border border-rose-500/40 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-rose-400"
+              >
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-emerald-300 mb-1 flex items-center gap-1">
+                <span class="w-5 h-5 rounded-full bg-emerald-600/40 text-emerald-200 flex items-center justify-center text-[10px] border border-emerald-400">2</span>
+                두 번째 소원 (가족이나 친구를 위한 소원)
+              </label>
+              <input 
+                type="text" 
+                id="wish-2" 
+                placeholder="예: 우리 반 친구들 모두 아프지 않고 건강하게 방학 맞이하기" 
+                maxlength="80" 
+                required
+                class="w-full bg-[#0a1f13] border border-emerald-500/40 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-400"
+              >
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-amber-300 mb-1 flex items-center gap-1">
+                <span class="w-5 h-5 rounded-full bg-amber-600/40 text-amber-200 flex items-center justify-center text-[10px] border border-amber-400">3</span>
+                세 번째 소원 (내년 새해에 꼭 이루고 싶은 소원)
+              </label>
+              <input 
+                type="text" 
+                id="wish-3" 
+                placeholder="예: 내년에도 멋진 일만 가득하고 즐겁게 생활하기" 
+                maxlength="80" 
+                required
+                class="w-full bg-[#0a1f13] border border-amber-500/40 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-400"
+              >
+            </div>
+          </div>
+
+          <!-- 카드 색상 테마 선택 -->
+          <div>
+            <label class="block text-xs font-bold text-emerald-200 mb-1.5">카드 테마 색상</label>
+            <div class="grid grid-cols-4 gap-2">
+              <label class="cursor-pointer">
+                <input type="radio" name="cardColor" value="red" checked class="peer sr-only">
+                <div class="p-2 rounded-xl text-center bg-red-950/80 border border-red-500/40 peer-checked:border-amber-400 peer-checked:ring-2 peer-checked:ring-amber-400 text-xs text-rose-200 font-bold transition">
+                  🎅 산타 레드
+                </div>
+              </label>
+              <label class="cursor-pointer">
+                <input type="radio" name="cardColor" value="green" class="peer sr-only">
+                <div class="p-2 rounded-xl text-center bg-emerald-950/80 border border-emerald-500/40 peer-checked:border-amber-400 peer-checked:ring-2 peer-checked:ring-amber-400 text-xs text-emerald-200 font-bold transition">
+                  🎄 트리 그린
+                </div>
+              </label>
+              <label class="cursor-pointer">
+                <input type="radio" name="cardColor" value="gold" class="peer sr-only">
+                <div class="p-2 rounded-xl text-center bg-amber-950/80 border border-amber-500/40 peer-checked:border-amber-400 peer-checked:ring-2 peer-checked:ring-amber-400 text-xs text-amber-200 font-bold transition">
+                  ⭐ 반짝 골드
+                </div>
+              </label>
+              <label class="cursor-pointer">
+                <input type="radio" name="cardColor" value="blue" class="peer sr-only">
+                <div class="p-2 rounded-xl text-center bg-sky-950/80 border border-sky-500/40 peer-checked:border-amber-400 peer-checked:ring-2 peer-checked:ring-amber-400 text-xs text-sky-200 font-bold transition">
+                  ❄️ 눈꽃 블루
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- 제출 버튼 -->
+          <div class="pt-2">
+            <button 
+              type="submit" 
+              class="w-full py-3.5 px-4 bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 hover:to-rose-500 text-white font-jua text-lg rounded-2xl shadow-xl transition-all transform active:scale-98 flex items-center justify-center gap-2 border border-amber-400/50"
+            >
+              <span>트리에 내 소원 걸기!</span>
+              <span class="text-xl">🎄✨</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- 2. 교사용 협력 보드 화면 -->
+    <section id="view-board" class="hidden">
+      <!-- 보드 툴바: 반 선택 탭 & 검색 & 모드 컨트롤 -->
+      <div class="bg-[#0b1f13]/90 border border-emerald-700/60 rounded-2xl p-3.5 mb-6 shadow-xl backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-3">
+        
+        <!-- 반별 필터 버튼 그룹 (전체, 7반, 8반, 9반) -->
+        <div class="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+          <button 
+            type="button"
+            data-class="ALL"
+            class="class-filter-btn px-3 py-1.5 rounded-xl font-jua text-xs transition-all bg-amber-400 text-slate-950 font-black shadow scale-105"
+          >
+            <span>전체 보기</span>
+            <span id="count-all" class="ml-1 text-[11px] px-1.5 py-0.2 bg-black/20 rounded-full">0</span>
+          </button>
+          <button 
+            type="button"
+            data-class="7반"
+            class="class-filter-btn px-3 py-1.5 rounded-xl font-jua text-xs transition-all bg-[#0a1b11] text-emerald-200 hover:text-white border border-emerald-800"
+          >
+            <span>🎄 7반</span>
+            <span id="count-7반" class="ml-1 text-[11px] px-1.5 py-0.2 bg-black/40 rounded-full text-amber-300">0</span>
+          </button>
+          <button 
+            type="button"
+            data-class="8반"
+            class="class-filter-btn px-3 py-1.5 rounded-xl font-jua text-xs transition-all bg-[#0a1b11] text-emerald-200 hover:text-white border border-emerald-800"
+          >
+            <span>⭐ 8반</span>
+            <span id="count-8반" class="ml-1 text-[11px] px-1.5 py-0.2 bg-black/40 rounded-full text-amber-300">0</span>
+          </button>
+          <button 
+            type="button"
+            data-class="9반"
+            class="class-filter-btn px-3 py-1.5 rounded-xl font-jua text-xs transition-all bg-[#0a1b11] text-emerald-200 hover:text-white border border-emerald-800"
+          >
+            <span>🎁 9반</span>
+            <span id="count-9반" class="ml-1 text-[11px] px-1.5 py-0.2 bg-black/40 rounded-full text-amber-300">0</span>
+          </button>
+        </div>
+
+        <!-- 검색창 및 유틸 버튼 -->
+        <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+          <div class="relative flex-1 md:w-48">
+            <input 
+              type="text" 
+              id="search-input" 
+              placeholder="이름이나 소원 검색..." 
+              class="w-full bg-[#07170e] border border-emerald-700/60 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-amber-400"
+            >
+            <i class="fa-solid fa-search absolute left-2.5 top-2.5 text-emerald-400 text-xs"></i>
+          </div>
+
+          <!-- 랜덤 소원 추첨 발표 -->
+          <button 
+            id="btn-random-pick"
+            type="button" 
+            title="무작위 소원 발표 뽑기"
+            class="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-jua text-xs rounded-xl shadow transition active:scale-95 flex items-center gap-1 font-bold"
+          >
+            <i class="fa-solid fa-dice"></i>
+            <span class="hidden sm:inline">랜덤 뽑기</span>
+          </button>
+
+          <!-- 전체화면 토글 -->
+          <button 
+            id="btn-fullscreen"
+            type="button" 
+            title="프로젝터 전체화면"
+            class="p-2 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 rounded-xl border border-emerald-700/50 transition active:scale-95 text-xs"
+          >
+            <i class="fa-solid fa-expand"></i>
+          </button>
+
+          <!-- 보드 잠그기 -->
+          <button 
+            id="btn-lock-board"
+            type="button" 
+            title="선생님 보드 잠그기"
+            class="px-2.5 py-1.5 bg-red-950/80 hover:bg-red-900 text-rose-300 rounded-xl border border-rose-800/60 text-xs font-bold transition flex items-center gap-1"
+          >
+            <i class="fa-solid fa-lock"></i>
+            <span class="hidden sm:inline">잠그기</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 보드 헤더 상태 정보 -->
+      <div class="flex items-center justify-between mb-4 px-2">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-jua text-amber-300 flex items-center gap-1.5">
+            <i class="fa-solid fa-tree text-emerald-400"></i>
+            <span id="current-filter-badge">전체 학급</span> 소원 카드 목록
+          </span>
+          <span id="badge-count" class="text-xs px-2 py-0.5 rounded-full bg-emerald-900/90 text-emerald-200 border border-emerald-600/50 font-bold">0</span>
+        </div>
+        <p class="text-[11px] text-emerald-300/80">
+          💡 카드를 클릭하면 다 함께 크게 읽어볼 수 있어요!
+        </p>
+      </div>
+
+      <!-- 소원 카드 그리드 -->
+      <div id="wishes-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <!-- 자바스크립트로 동적 렌더링 -->
+      </div>
+
+      <!-- 등록된 소원이 없을 때 안내 -->
+      <div id="empty-state" class="text-center py-16 bg-black/20 rounded-3xl border border-dashed border-emerald-700/50 my-6">
+        <div class="text-5xl mb-3">🔔</div>
+        <h3 class="text-xl font-jua text-amber-200 mb-1">아직 도착한 소원이 없어요!</h3>
+        <p class="text-xs text-emerald-300 mb-4">학생들에게 QR 코드를 공유하거나 소원을 작성해보세요.</p>
+        <button 
+          id="btn-empty-goto-student" 
+          class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-jua text-xs rounded-xl shadow transition"
+        >
+          소원 적으러 가기 🎄
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 크게 읽기 모달 (소원 낭독용) -->
+  <div id="wish-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden">
+    <div class="card-animate bg-gradient-to-b from-[#183a26] to-[#0c1f14] border-2 border-amber-400 rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl relative">
+      <button 
+        id="btn-close-wish-modal-x"
+        type="button" 
+        class="absolute right-4 top-4 text-emerald-300 hover:text-white text-xl p-1"
+      >
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="text-center mb-5">
+        <span id="modal-badge" class="inline-block px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider mb-2"></span>
+        <div class="flex items-center justify-center gap-2">
+          <span id="modal-class-badge" class="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-black text-xs"></span>
+          <h3 id="modal-name" class="text-2xl font-jua text-amber-200"></h3>
+        </div>
+        <p id="modal-time" class="text-xs text-emerald-300/80 mt-1"></p>
+      </div>
+
+      <div class="space-y-3.5 my-6 text-sm">
+        <div class="bg-black/40 p-3.5 rounded-2xl border border-rose-500/40">
+          <span class="block text-xs font-bold text-rose-300 mb-1">🎄 소원 1</span>
+          <p id="modal-wish-1" class="text-white text-base leading-snug font-medium"></p>
+        </div>
+        <div class="bg-black/40 p-3.5 rounded-2xl border border-emerald-500/40">
+          <span class="block text-xs font-bold text-emerald-300 mb-1">🎁 소원 2</span>
+          <p id="modal-wish-2" class="text-white text-base leading-snug font-medium"></p>
+        </div>
+        <div class="bg-black/40 p-3.5 rounded-2xl border border-amber-500/40">
+          <span class="block text-xs font-bold text-amber-300 mb-1">⭐ 소원 3</span>
+          <p id="modal-wish-3" class="text-white text-base leading-snug font-medium"></p>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-2">
+        <button 
+          id="modal-like-btn"
+          type="button"
+          class="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-rose-600 to-red-600 text-white font-jua text-sm flex items-center gap-2 shadow hover:scale-105 active:scale-95 transition"
+        >
+          <span>👏 다같이 응원 박수!</span>
+          <span id="modal-like-count" class="bg-black/30 px-2 py-0.5 rounded-full text-xs">0</span>
+        </button>
+
+        <button 
+          id="btn-close-wish-modal"
+          type="button" 
+          class="px-4 py-2 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 text-xs font-bold rounded-xl border border-emerald-700/60 transition"
+        >
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 교사용 비밀번호 인증 모달 -->
+  <div id="auth-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
+    <div class="card-animate bg-gradient-to-b from-[#1c2e22] to-[#0f1b13] border-2 border-amber-400 rounded-3xl p-6 max-w-sm w-full shadow-2xl relative text-center">
+      <div class="w-12 h-12 rounded-2xl bg-amber-400/20 text-amber-300 border border-amber-400/40 flex items-center justify-center text-xl mx-auto mb-3">
+        <i class="fa-solid fa-lock"></i>
+      </div>
+      <h3 class="text-xl font-jua text-amber-300 mb-1">선생님 전용 보드</h3>
+      <p class="text-xs text-emerald-200 mb-4">비밀번호를 입력하여 보드를 열어주세요.</p>
+
+      <form id="auth-form" class="space-y-3">
+        <input 
+          type="password" 
+          id="teacher-password-input" 
+          placeholder="비밀번호를 입력하세요" 
+          required
+          class="w-full bg-[#08150e] border border-emerald-600/70 rounded-xl px-3.5 py-2.5 text-center text-sm text-white focus:outline-none focus:border-amber-400"
+        >
+        <p id="auth-error-msg" class="text-xs text-rose-400 font-bold hidden">
+          비밀번호가 올바르지 않습니다.
+        </p>
+
+        <div class="flex gap-2 pt-2">
+          <button 
+            type="button" 
+            id="btn-close-auth-modal"
+            class="flex-1 py-2 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 rounded-xl text-xs font-bold border border-emerald-800 transition"
+          >
+            취소
+          </button>
+          <button 
+            type="submit" 
+            class="flex-1 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-sm font-black rounded-xl shadow transition"
+          >
+            열기 ✨
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 학생 접속용 QR 코드 팝업 모달 -->
+  <div id="qr-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
+    <div class="card-animate bg-gradient-to-b from-[#132c1b] to-[#0a180f] border-2 border-amber-400 rounded-3xl p-6 max-w-sm w-full shadow-2xl relative text-center">
+      <button 
+        id="btn-close-qr-modal-x"
+        type="button" 
+        class="absolute right-4 top-4 text-emerald-300 hover:text-white text-lg p-1"
+      >
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <h3 class="text-2xl font-jua text-amber-300 mb-1">학생 소원 접수 QR</h3>
+      <p class="text-xs text-emerald-200 mb-4">
+        스마트폰 카메라로 비추면 바로 소원 적기 페이지로 접속됩니다!
+      </p>
+
+      <!-- 내장 QR 이미지 렌더러 -->
+      <div class="bg-white p-4 rounded-2xl inline-block shadow-2xl border-4 border-amber-400/80 mx-auto mb-3">
+        <img id="qr-image" src="" alt="접속 QR코드" class="w-48 h-48 mx-auto object-contain">
+      </div>
+
+      <div class="space-y-2 mt-2">
+        <div class="bg-[#0b1c11] p-2.5 rounded-xl border border-emerald-700/60 flex items-center justify-between text-xs text-emerald-200 gap-2">
+          <span id="qr-url-text" class="truncate font-mono text-[11px]"></span>
+          <button id="btn-copy-access-link" class="shrink-0 px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 text-amber-200 font-bold rounded-lg border border-emerald-600 transition text-[11px]">
+            링크 복사
+          </button>
+        </div>
+        <p id="copy-toast" class="text-xs text-amber-300 font-bold hidden">
+          ✨ 링크가 클립보드에 복사되었습니다!
+        </p>
+      </div>
+
+      <div class="mt-4 pt-3 border-t border-emerald-800/80 flex justify-center">
+        <button id="btn-close-qr-modal" class="px-6 py-2 bg-red-600 hover:bg-red-500 font-jua text-sm text-white rounded-xl shadow transition">
+          확인 완료
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 전체 프론트엔드 및 실시간 통신 스크립트 -->
+  <script>
+    // --- 1. 상태 변수 및 설정 ---
+    const STORAGE_KEY = 'CHRISTMAS_WISHES_OFFICIAL_V1';
+    let wishes = [];
+    let currentClassFilter = 'ALL';
+    let currentModalWishId = null;
+    let isTeacherAuthenticated = false;
+
+    // 선생님 기본 비밀번호
+    const TEACHER_PASS = '1225';
+
+    // 전 세계 오픈 웹소켓 브로커를 통한 방 단위 실시간 통신
+    const urlParams = new URLSearchParams(window.location.search);
+    // 현재 URL의 호스트명과 경로를 조합하여 고유한 크리스마스 채널명 생성
+    const rawPath = window.location.pathname.replace(/[^a-zA-Z0-9]/g, '');
+    const ROOM_TOPIC = 'xmas_tree_channel_' + (rawPath || 'default_room_2024');
+    let mqttClient = null;
+
+    const THEMES = {
+      red: { bg: 'from-[#421118]/90 to-[#1e070b]/95', border: 'border-red-500/50 hover:border-amber-400', icon: '🎅' },
+      green: { bg: 'from-[#0e3b1f]/90 to-[#072011]/95', border: 'border-emerald-500/50 hover:border-amber-400', icon: '🎄' },
+      gold: { bg: 'from-[#3d2e0b]/90 to-[#1f1704]/95', border: 'border-amber-500/50 hover:border-yellow-300', icon: '⭐' },
+      blue: { bg: 'from-[#0d2a42]/90 to-[#061521]/95', border: 'border-sky-500/50 hover:border-sky-300', icon: '❄️' }
+    };
+
+    // --- 2. 실시간 웹소켓 중계망 연결 (학생폰 ➜ 교사화면 통신) ---
+    function initRealtimeSync() {
+      const statusText = document.getElementById('live-status-text');
+      const liveDot = document.getElementById('live-dot');
+
+      loadLocalWishes();
+      renderWishes();
+      updateCounts();
+
+      // Paho MQTT Client 생성 (무료 오픈 브로커: broker.emqx.io wss/8084)
+      const clientId = 'client_' + Math.random().toString(36).substring(2, 10);
+      try {
+        mqttClient = new Paho.MQTT.Client("broker.emqx.io", 8084, "/mqtt", clientId);
+
+        mqttClient.onConnectionLost = (responseObject) => {
+          if (liveDot) liveDot.className = "w-2 h-2 rounded-full bg-rose-500";
+          if (statusText) statusText.textContent = "재연결 대기 중...";
+          setTimeout(initRealtimeSync, 3000);
+        };
+
+        mqttClient.onMessageArrived = (message) => {
+          try {
+            const data = JSON.parse(message.payloadString);
+            if (data.type === 'NEW_WISH') {
+              // 중복 체크 후 추가
+              if (!wishes.some(w => w.id === data.payload.id)) {
+                wishes.unshift(data.payload);
+                saveLocalWishes();
+                updateCounts();
+                renderWishes();
+                confetti({ particleCount: 50, spread: 70, origin: { y: 0.4 } });
+              }
+            } else if (data.type === 'LIKE_WISH') {
+              const target = wishes.find(w => w.id === data.payload.id);
+              if (target) {
+                target.likes = (target.likes || 0) + 1;
+                saveLocalWishes();
+                const likeEl = document.getElementById(`card-like-${target.id}`);
+                if (likeEl) likeEl.textContent = target.likes;
+                if (currentModalWishId === target.id) {
+                  const mEl = document.getElementById('modal-like-count');
+                  if (mEl) mEl.textContent = target.likes;
+                }
+              }
+            }
+          } catch (e) {
+            console.error("데이터 수신 오류:", e);
+          }
+        };
+
+        mqttClient.connect({
+          useSSL: true,
+          timeout: 5,
+          onSuccess: () => {
+            if (liveDot) liveDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+            if (statusText) statusText.textContent = "실시간 클라우드 연결됨 ✨";
+            mqttClient.subscribe(ROOM_TOPIC, { qos: 1 });
+          },
+          onFailure: (err) => {
+            console.warn("웹소켓 연결 실패 (로컬 모드로 전환):", err);
+            if (liveDot) liveDot.className = "w-2 h-2 rounded-full bg-amber-400";
+            if (statusText) statusText.textContent = "로컬 모드 작동 중";
+          }
+        });
+      } catch (err) {
+        if (statusText) statusText.textContent = "로컬 모드 작동 중";
+      }
+    }
+
+    // 소원 메시지 브로드캐스트 발행
+    function broadcastData(type, payload) {
+      if (mqttClient && mqttClient.isConnected()) {
+        const msg = new Paho.MQTT.Message(JSON.stringify({ type, payload }));
+        msg.destinationName = ROOM_TOPIC;
+        msg.qos = 1;
+        mqttClient.send(msg);
+      }
+    }
+
+    // --- 3. 뷰 전환 및 인증 제어 ---
+    function switchView(mode) {
+      const studentView = document.getElementById('view-student');
+      const boardView = document.getElementById('view-board');
+      const tabStudent = document.getElementById('tab-student');
+      const tabBoard = document.getElementById('tab-board');
+
+      if (mode === 'student') {
+        studentView.classList.remove('hidden');
+        boardView.classList.add('hidden');
+        tabStudent.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 bg-red-600 text-white shadow-md";
+        tabBoard.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 text-emerald-200 hover:text-white";
+      } else {
+        studentView.classList.add('hidden');
+        boardView.classList.remove('hidden');
+        tabBoard.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 bg-amber-500 text-slate-950 font-black shadow-md";
+        tabStudent.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 text-emerald-200 hover:text-white";
+        updateCounts();
+        renderWishes();
+      }
+    }
+
+    function requestTeacherAccess() {
+      if (isTeacherAuthenticated) {
+        switchView('board');
+      } else {
+        openAuthModal();
+      }
+    }
+
+    function openAuthModal() {
+      const modal = document.getElementById('auth-modal');
+      const input = document.getElementById('teacher-password-input');
+      const errorMsg = document.getElementById('auth-error-msg');
+      input.value = '';
+      errorMsg.classList.add('hidden');
+      modal.classList.remove('hidden');
+      setTimeout(() => input.focus(), 100);
+    }
+
+    function closeAuthModal() {
+      document.getElementById('auth-modal').classList.add('hidden');
+    }
+
+    function handleAuthSubmit(e) {
+      e.preventDefault();
+      const entered = document.getElementById('teacher-password-input').value.trim();
+      if (entered === TEACHER_PASS) {
+        isTeacherAuthenticated = true;
+        closeAuthModal();
+        const lockIcon = document.getElementById('lock-icon');
+        if (lockIcon) {
+          lockIcon.className = "fa-solid fa-lock-open text-emerald-300";
+        }
+        switchView('board');
+      } else {
+        document.getElementById('auth-error-msg').classList.remove('hidden');
+      }
+    }
+
+    function lockTeacherMode() {
+      isTeacherAuthenticated = false;
+      const lockIcon = document.getElementById('lock-icon');
+      if (lockIcon) {
+        lockIcon.className = "fa-solid fa-lock text-amber-400";
+      }
+      switchView('student');
+    }
+
+    // --- 4. 소원 제출 처리 ---
+    function handleFormSubmit(e) {
+      e.preventDefault();
+
+      const className = document.getElementById('input-class').value;
+      const isAnonymous = document.getElementById('input-anonymous').checked;
+      let rawName = document.getElementById('input-name').value.trim();
+      const displayName = isAnonymous ? (rawName || '비밀의 요정 🧝') : rawName;
+
+      const wish1 = document.getElementById('wish-1').value.trim();
+      const wish2 = document.getElementById('wish-2').value.trim();
+      const wish3 = document.getElementById('wish-3').value.trim();
+      const selectedColor = document.querySelector('input[name="cardColor"]:checked')?.value || 'red';
+
+      const newWish = {
+        id: 'wish_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        className: className,
+        name: displayName,
+        isAnonymous: isAnonymous,
+        wish1: wish1,
+        wish2: wish2,
+        wish3: wish3,
+        color: selectedColor,
+        likes: 0,
+        timestamp: Date.now(),
+        createdAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+      };
+
+      // 1. 내 로컬 저장 및 화면 업데이트
+      wishes.unshift(newWish);
+      saveLocalWishes();
+      updateCounts();
+      renderWishes();
+
+      // 2. 실시간 인터넷 망으로 선생님 화면에 즉시 발송!
+      broadcastData('NEW_WISH', newWish);
+
+      confetti({ particleCount: 65, spread: 70, origin: { y: 0.6 } });
+
+      document.getElementById('wish-form').reset();
+      document.getElementById('anon-hint').classList.add('hidden');
+      document.getElementById('input-name').required = true;
+
+      // 축하 토스트 띄우기
+      const toast = document.createElement('div');
+      toast.className = "fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white px-6 py-3.5 rounded-2xl shadow-2xl font-jua text-base flex items-center gap-2 card-animate border-2 border-amber-300 text-center";
+      toast.innerHTML = "<span>✨ 산타 할아버지의 소원나무에 실시간으로 걸렸어요! 🎄</span>";
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // --- 5. 보드 카드 렌더링 및 필터 ---
+    function renderWishes() {
+      const grid = document.getElementById('wishes-grid');
+      const emptyState = document.getElementById('empty-state');
+      const query = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+
+      const filtered = wishes.filter(item => {
+        const matchClass = (currentClassFilter === 'ALL') || (item.className === currentClassFilter);
+        if (!matchClass) return false;
+        if (!query) return true;
+        return (item.name || '').toLowerCase().includes(query) ||
+               (item.wish1 || '').toLowerCase().includes(query) ||
+               (item.wish2 || '').toLowerCase().includes(query) ||
+               (item.wish3 || '').toLowerCase().includes(query);
+      });
+
+      if (filtered.length === 0) {
+        grid.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      grid.innerHTML = filtered.map(item => {
+        const theme = THEMES[item.color] || THEMES.red;
+        return `
+          <div class="card-animate bg-gradient-to-b ${theme.bg} rounded-2xl p-4 border ${theme.border} shadow-lg transition-all hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-between relative">
+            <div>
+              <div class="flex items-center justify-between gap-1 mb-2.5 pb-2 border-b border-white/10">
+                <div class="flex items-center gap-1.5 overflow-hidden">
+                  <span class="text-xl filter drop-shadow">${theme.icon}</span>
+                  <div class="truncate">
+                    <span class="inline-block px-1.5 py-0.2 text-[10px] rounded bg-amber-400 text-slate-950 font-black mr-1">
+                      ${escapeHtml(item.className || '7반')}
+                    </span>
+                    <strong class="font-jua text-base text-amber-200 tracking-wide truncate">
+                      ${escapeHtml(item.name)}
+                    </strong>
+                  </div>
+                </div>
+
+                ${item.isAnonymous ? `
+                  <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-bold">
+                    🤫익명
+                  </span>
+                ` : `
+                  <span class="shrink-0 text-[10px] text-emerald-300">
+                    ${item.createdAt || ''}
+                  </span>
+                `}
+              </div>
+
+              <div class="space-y-1.5 text-xs text-slate-200">
+                <div class="bg-black/30 p-2 rounded-xl border border-white/5 flex items-start gap-1.5">
+                  <span class="text-rose-400 font-bold shrink-0">1.</span>
+                  <p class="line-clamp-2 leading-tight">${escapeHtml(item.wish1)}</p>
+                </div>
+                <div class="bg-black/30 p-2 rounded-xl border border-white/5 flex items-start gap-1.5">
+                  <span class="text-emerald-300 font-bold shrink-0">2.</span>
+                  <p class="line-clamp-2 leading-tight">${escapeHtml(item.wish2)}</p>
+                </div>
+                <div class="bg-black/30 p-2 rounded-xl border border-white/5 flex items-start gap-1.5">
+                  <span class="text-amber-300 font-bold shrink-0">3.</span>
+                  <p class="line-clamp-2 leading-tight">${escapeHtml(item.wish3)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between gap-1.5">
+              <button 
+                type="button"
+                data-like-id="${item.id}"
+                class="btn-like-action px-2.5 py-1 rounded-xl bg-black/40 hover:bg-rose-950/80 text-rose-300 text-xs flex items-center gap-1 transition active:scale-90 border border-white/10"
+              >
+                <span>❤️</span>
+                <span id="card-like-${item.id}" class="font-bold text-[11px]">${item.likes || 0}</span>
+              </button>
+
+              <button 
+                type="button"
+                data-modal-id="${item.id}"
+                class="btn-modal-action px-2.5 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-xs font-black transition flex items-center gap-1 shadow"
+              >
+                <i class="fa-solid fa-expand text-[10px]"></i>
+                <span>크게 읽기</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function setClassFilter(targetClass) {
+      currentClassFilter = targetClass;
+      document.getElementById('current-filter-badge').textContent = targetClass === 'ALL' ? '전체 학급' : targetClass;
+
+      document.querySelectorAll('.class-filter-btn').forEach(btn => {
+        if (btn.getAttribute('data-class') === targetClass) {
+          btn.className = "class-filter-btn px-3 py-1.5 rounded-xl font-jua text-xs transition-all bg-amber-400 text-slate-950 font-black shadow scale-105";
+        } else {
+          btn.className = "class-filter-btn px-3 py-1.5 rounded-xl font-jua text-xs transition-all bg-[#0a1b11] text-emerald-200 hover:text-white border border-emerald-800";
+        }
+      });
+
+      renderWishes();
+    }
+
+    function updateCounts() {
+      const targetClasses = ['7반', '8반', '9반'];
+      const counts = { 'ALL': wishes.length };
+      targetClasses.forEach(c => counts[c] = 0);
+
+      wishes.forEach(item => {
+        const cls = item.className || '7반';
+        if (counts[cls] !== undefined) counts[cls]++;
+      });
+
+      const countAll = document.getElementById('count-all');
+      if (countAll) countAll.textContent = counts['ALL'];
+
+      targetClasses.forEach(c => {
+        const el = document.getElementById(`count-${c}`);
+        if (el) el.textContent = counts[c] || 0;
+      });
+
+      const badgeCount = document.getElementById('badge-count');
+      if (badgeCount) badgeCount.textContent = wishes.length;
+    }
+
+    // --- 6. 모달 및 크게 읽기 ---
+    function openWishModal(wishId) {
+      const item = wishes.find(w => w.id === wishId);
+      if (!item) return;
+
+      currentModalWishId = wishId;
+      document.getElementById('modal-class-badge').textContent = item.className || '7반';
+      document.getElementById('modal-name').textContent = item.name;
+      document.getElementById('modal-time').textContent = `${item.createdAt || ''} 에 걸어둔 소원`;
+      document.getElementById('modal-wish-1').textContent = item.wish1;
+      document.getElementById('modal-wish-2').textContent = item.wish2;
+      document.getElementById('modal-wish-3').textContent = item.wish3;
+      document.getElementById('modal-like-count').textContent = item.likes || 0;
+
+      const badge = document.getElementById('modal-badge');
+      if (item.isAnonymous) {
+        badge.textContent = '🤫 비밀 산타의 소원';
+        badge.className = 'inline-block px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-900 text-emerald-300 border border-emerald-500/50';
+      } else {
+        badge.textContent = '🎄 반짝이는 소원';
+        badge.className = 'inline-block px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-red-900 text-red-300 border border-red-500/50';
+      }
+
+      document.getElementById('wish-modal').classList.remove('hidden');
+    }
+
+    function closeWishModal() {
+      document.getElementById('wish-modal').classList.add('hidden');
+      currentModalWishId = null;
+    }
+
+    function cheerModalWish() {
+      if (!currentModalWishId) return;
+      addCardLike(currentModalWishId);
+      confetti({ particleCount: 35, spread: 60, origin: { y: 0.7 } });
+    }
+
+    function addCardLike(wishId) {
+      const item = wishes.find(w => w.id === wishId);
+      if (!item) return;
+
+      item.likes = (item.likes || 0) + 1;
+      saveLocalWishes();
+
+      const target = document.getElementById(`card-like-${wishId}`);
+      if (target) target.textContent = item.likes;
+      const modalCount = document.getElementById('modal-like-count');
+      if (modalCount && currentModalWishId === wishId) modalCount.textContent = item.likes;
+
+      broadcastData('LIKE_WISH', { id: wishId });
+    }
+
+    function pickRandomWish() {
+      const candidates = wishes.filter(item => (currentClassFilter === 'ALL') || (item.className === currentClassFilter));
+      if (candidates.length === 0) return;
+
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+      confetti({ particleCount: 45, spread: 60, origin: { y: 0.5 } });
+      openWishModal(chosen.id);
+    }
+
+    // --- 7. QR 코드 팝업 (학생 전용 링크 생성) ---
+    function openQrModal() {
+      const modal = document.getElementById('qr-modal');
+      const urlText = document.getElementById('qr-url-text');
+      const qrImg = document.getElementById('qr-image');
+
+      const currentUrl = window.location.href.split('#')[0].split('?')[0] + '?view=student';
+      urlText.textContent = currentUrl;
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(currentUrl)}`;
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeQrModal() {
+      document.getElementById('qr-modal').classList.add('hidden');
+    }
+
+    function copyLink() {
+      const currentUrl = window.location.href.split('#')[0].split('?')[0] + '?view=student';
+      const temp = document.createElement('input');
+      temp.value = currentUrl;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      document.body.removeChild(temp);
+
+      const toast = document.getElementById('copy-toast');
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2000);
+    }
+
+    // --- 8. 눈 내리는 배경 애니메이션 ---
+    function initSnowCanvas() {
+      const canvas = document.getElementById('snow-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let width = canvas.width = window.innerWidth;
+      let height = canvas.height = window.innerHeight;
+
+      window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      });
+
+      const flakes = [];
+      const count = 65;
+      for (let i = 0; i < count; i++) {
+        flakes.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          radius: Math.random() * 2.5 + 1,
+          speedY: Math.random() * 1.2 + 0.5,
+          speedX: Math.random() * 0.6 - 0.3,
+          opacity: Math.random() * 0.6 + 0.25
+        });
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, width, height);
+        for (let i = 0; i < count; i++) {
+          const f = flakes[i];
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${f.opacity})`;
+          ctx.fill();
+
+          f.y += f.speedY;
+          f.x += f.speedX;
+
+          if (f.y > height) { f.y = -5; f.x = Math.random() * width; }
+          if (f.x > width) f.x = 0;
+          if (f.x < 0) f.x = width;
+        }
+        requestAnimationFrame(render);
+      }
+      render();
+    }
+
+    // --- 9. 스토리지 로컬 보관 ---
+    function loadLocalWishes() {
+      try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        wishes = data ? JSON.parse(data) : [];
+      } catch (e) {
+        wishes = [];
+      }
+    }
+
+    function saveLocalWishes() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(wishes));
+      } catch (e) {}
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // --- 10. 초기화 및 이벤트 연결 ---
+    window.addEventListener('DOMContentLoaded', () => {
+      initSnowCanvas();
+      
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('view') === 'student') {
+        switchView('student');
+      }
+
+      // 실시간 통신 및 초기 화면 기동
+      initRealtimeSync();
+
+      // 상단 버튼
+      document.getElementById('btn-open-qr')?.addEventListener('click', openQrModal);
+      document.getElementById('tab-student')?.addEventListener('click', () => switchView('student'));
+      document.getElementById('tab-board')?.addEventListener('click', requestTeacherAccess);
+
+      // 소원 폼 이벤트
+      document.getElementById('input-anonymous')?.addEventListener('change', (e) => {
+        const nameInput = document.getElementById('input-name');
+        const hint = document.getElementById('anon-hint');
+        if (e.target.checked) {
+          nameInput.value = '';
+          nameInput.placeholder = '별명 (비워두면 비밀요정)';
+          nameInput.required = false;
+          hint.classList.remove('hidden');
+        } else {
+          nameInput.placeholder = '이름 (예: 김민우)';
+          nameInput.required = true;
+          hint.classList.add('hidden');
+        }
+      });
+      document.getElementById('wish-form')?.addEventListener('submit', handleFormSubmit);
+
+      // 반별 필터 버튼
+      document.querySelectorAll('.class-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          setClassFilter(btn.getAttribute('data-class'));
+        });
+      });
+
+      // 검색 필터
+      document.getElementById('search-input')?.addEventListener('input', renderWishes);
+
+      // 툴바 액션
+      document.getElementById('btn-lock-board')?.addEventListener('click', lockTeacherMode);
+      document.getElementById('btn-random-pick')?.addEventListener('click', pickRandomWish);
+      document.getElementById('btn-fullscreen')?.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen?.();
+        }
+      });
+      document.getElementById('btn-empty-goto-student')?.addEventListener('click', () => switchView('student'));
+
+      // 카드 클릭 이벤트 위임
+      document.getElementById('wishes-grid')?.addEventListener('click', (e) => {
+        const likeBtn = e.target.closest('.btn-like-action');
+        if (likeBtn) {
+          addCardLike(likeBtn.getAttribute('data-like-id'));
+          return;
+        }
+        const modalBtn = e.target.closest('.btn-modal-action');
+        if (modalBtn) {
+          openWishModal(modalBtn.getAttribute('data-modal-id'));
+        }
+      });
+
+      // 모달 닫기
+      document.getElementById('btn-close-wish-modal-x')?.addEventListener('click', closeWishModal);
+      document.getElementById('btn-close-wish-modal')?.addEventListener('click', closeWishModal);
+      document.getElementById('modal-like-btn')?.addEventListener('click', cheerModalWish);
+
+      // 인증 모달
+      document.getElementById('auth-form')?.addEventListener('submit', handleAuthSubmit);
+      document.getElementById('btn-close-auth-modal')?.addEventListener('click', closeAuthModal);
+
+      // QR 모달
+      document.getElementById('btn-close-qr-modal-x')?.addEventListener('click', closeQrModal);
+      document.getElementById('btn-close-qr-modal')?.addEventListener('click', closeQrModal);
+      document.getElementById('btn-copy-access-link')?.addEventListener('click', copyLink);
+    });
+  </script>
+</body>
+</html>
